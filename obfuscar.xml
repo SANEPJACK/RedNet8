@@ -1,0 +1,31 @@
+<?xml version="1.0"?>
+<Obfuscator>
+  <!--
+    Obfuscar config for this project.
+
+    Notes:
+    - This focuses on making dnSpy/ILSpy output harder to read (rename types/methods/fields),
+      while keeping property names stable to avoid breaking XmlSerializer / JsonSerializer.
+    - Obfuscation is not "perfect protection". Do not embed secrets (API keys/tokens) in the EXE.
+  -->
+
+  <Var name="InPath" value="bin\Release\net8.0-windows\win-x64\" />
+  <Var name="OutPath" value="bin\Release\net8.0-windows\win-x64\obfuscated\" />
+
+  <Var name="KeepPublicApi" value="true" />
+  <Var name="HidePrivateApi" value="true" />
+
+  <Var name="RenameProperties" value="false" />
+  <Var name="RenameEvents" value="true" />
+  <Var name="RenameFields" value="true" />
+
+  <Var name="UseUnicodeNames" value="true" />
+  <Var name="ReuseNames" value="false" />
+  <Var name="RegenerateDebugInfo" value="false" />
+
+  <!-- Obfuscating strings is optional; keep it off by default. -->
+  <Var name="HideStrings" value="false" />
+  <!-- <Var name="HideStrings" value="true" /> -->
+
+  <Module file="$(InPath)RedSkull.dll" />
+</Obfuscator>

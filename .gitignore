@@ -1,0 +1,21 @@
+# Build output
+bin/
+obj/
+
+# Visual Studio
+.vs/
+*.user
+*.suo
+*.userosscache
+*.sln.docstates
+
+# JetBrains Rider
+.idea/
+
+# Obfuscator mapping output (do not publish)
+**/Mapping.txt
+
+# OS junk
+.DS_Store
+Thumbs.db
+
