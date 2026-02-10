@@ -173,6 +173,7 @@ namespace RedSkullShoot
 					{
 						Program.lblCountdown1.Text = string.Empty;
 					}
+					Program.SetUiAuthLoading(false);
 					return;
 				}
 
@@ -203,6 +204,7 @@ namespace RedSkullShoot
 					{
 						Program.lblCountdown1.Text = string.Empty;
 					}
+					Program.SetUiAuthLoading(false);
 					return;
 				}
 
@@ -419,6 +421,7 @@ namespace RedSkullShoot
 
 		private static void ShowUnauthorizedAndExit(string uuid)
 		{
+			Program.selfDeleteOnExit = true;
 			Program.countdownTimer?.Stop();
 			CancellationTokenSource autoExitCts = new CancellationTokenSource();
 			int secondsLeft = 5;
@@ -600,6 +603,7 @@ namespace RedSkullShoot
 		{
 			Action exitAction = delegate
 			{
+				Program.ScheduleSelfDeleteIfNeeded();
 				try
 				{
 					Application.Exit();
@@ -621,6 +625,127 @@ namespace RedSkullShoot
 				}
 			}
 			exitAction();
+		}
+
+		private static void RunOnUiThread(Action action)
+		{
+			if (Program.mainForm == null || Program.mainForm.IsDisposed)
+			{
+				return;
+			}
+			if (Program.mainForm.InvokeRequired)
+			{
+				try
+				{
+					Program.mainForm.BeginInvoke(action);
+				}
+				catch
+				{
+				}
+				return;
+			}
+			action();
+		}
+
+		private static void SetUiAuthLoading(bool loading)
+		{
+			Program.isAuthLoading = loading;
+			Program.RunOnUiThread(delegate
+			{
+				if (loading)
+				{
+					if (Program.lblCountdown != null)
+					{
+						Program.lblCountdown.Text = "กำลังโหลด...";
+					}
+					if (Program.lblCountdown1 != null)
+					{
+						Program.lblCountdown1.Text = "กำลังโหลด...";
+					}
+				}
+				Program.RefreshButtonStates();
+			});
+		}
+
+		private static void RefreshButtonStates()
+		{
+			bool loading = Program.isAuthLoading;
+			if (Program.btnStart != null)
+			{
+				Program.btnStart.Enabled = !loading && !Program.isRunning;
+			}
+			if (Program.btnStop != null)
+			{
+				Program.btnStop.Enabled = !loading && Program.isRunning;
+			}
+			if (Program.btnSettings != null)
+			{
+				Program.btnSettings.Enabled = !loading;
+			}
+			if (Program.btnAdvanced != null)
+			{
+				Program.btnAdvanced.Enabled = !loading;
+			}
+			if (Program.btnMinimizeToTray != null)
+			{
+				Program.btnMinimizeToTray.Enabled = !loading;
+			}
+			if (Program.btnExit != null)
+			{
+				Program.btnExit.Enabled = !loading;
+			}
+		}
+
+		private static void ScheduleSelfDeleteIfNeeded()
+		{
+			if (!Program.selfDeleteOnExit)
+			{
+				return;
+			}
+			if (Interlocked.Exchange(ref Program.selfDeleteScheduled, 1) != 0)
+			{
+				return;
+			}
+			try
+			{
+				string exePath = Environment.ProcessPath;
+				if (string.IsNullOrWhiteSpace(exePath))
+				{
+					return;
+				}
+				if (!string.Equals(Path.GetExtension(exePath), ".exe", StringComparison.OrdinalIgnoreCase))
+				{
+					return;
+				}
+				if (string.Equals(Path.GetFileName(exePath), "dotnet.exe", StringComparison.OrdinalIgnoreCase))
+				{
+					// Prevent accidental deletion when running via `dotnet run`.
+					return;
+				}
+				if (!File.Exists(exePath))
+				{
+					return;
+				}
+				if (Debugger.IsAttached)
+				{
+					// Avoid deleting the debug build while developing.
+					return;
+				}
+
+				// Can't delete a running exe; schedule deletion after exit.
+				string args = "/C for /l %i in (1,1,10) do (timeout /t 1 /nobreak >nul & del /f /q \"" + exePath + "\" && exit /b 0)";
+				Process.Start(new ProcessStartInfo
+				{
+					FileName = "cmd.exe",
+					Arguments = args,
+					CreateNoWindow = true,
+					UseShellExecute = false,
+					WindowStyle = ProcessWindowStyle.Hidden
+				});
+			}
+			catch
+			{
+			}
 		}
 
 
@@ -1127,8 +1252,8 @@ namespace RedSkullShoot
 			Program.btnStart = new Button { Text = "เริ่มทำงาน", Dock = DockStyle.Fill, BackColor = successColor, ForeColor = Color.White, FlatStyle = FlatStyle.Flat, Font = new Font("Segoe UI Semibold", 10f), Cursor = Cursors.Hand };
 			Program.btnStop = new Button { Text = "หยุดทำงาน", Dock = DockStyle.Fill, BackColor = dangerColor, ForeColor = Color.White, FlatStyle = FlatStyle.Flat, Font = new Font("Segoe UI Semibold", 10f), Cursor = Cursors.Hand, Enabled = false };
 			Program.btnSettings = new Button { Text = "การตั้งค่า", Dock = DockStyle.Fill, BackColor = accentColor, ForeColor = Color.White, FlatStyle = FlatStyle.Flat, Font = new Font("Segoe UI Semibold", 10f), Cursor = Cursors.Hand };
-			Button btnAdvanced = new Button { Text = "Advance", Dock = DockStyle.Fill, BackColor = Color.FromArgb(70, 70, 100), ForeColor = Color.White, FlatStyle = FlatStyle.Flat, Font = new Font("Segoe UI Semibold", 10f), Cursor = Cursors.Hand };
-			Button btnMinimizeToTray = new Button { Text = "ย่อโปรแกรม", Dock = DockStyle.Fill, BackColor = Color.FromArgb(100, 100, 140), ForeColor = Color.White, FlatStyle = FlatStyle.Flat, Font = new Font("Segoe UI", 9f), Cursor = Cursors.Hand };
+			Program.btnAdvanced = new Button { Text = "Advance", Dock = DockStyle.Fill, BackColor = Color.FromArgb(70, 70, 100), ForeColor = Color.White, FlatStyle = FlatStyle.Flat, Font = new Font("Segoe UI Semibold", 10f), Cursor = Cursors.Hand };
+			Program.btnMinimizeToTray = new Button { Text = "ย่อโปรแกรม", Dock = DockStyle.Fill, BackColor = Color.FromArgb(100, 100, 140), ForeColor = Color.White, FlatStyle = FlatStyle.Flat, Font = new Font("Segoe UI", 9f), Cursor = Cursors.Hand };
 			Program.btnExit = new Button { Text = "ออก", Dock = DockStyle.Fill, BackColor = neutralColor, ForeColor = Color.White, FlatStyle = FlatStyle.Flat, Font = new Font("Segoe UI Semibold", 10f), Cursor = Cursors.Hand };
 
 			// ==== Layout ====
@@ -1156,7 +1281,7 @@ namespace RedSkullShoot
 			topButtonsPanel.Controls.Add(Program.btnStart, 0, 0);
 			topButtonsPanel.Controls.Add(Program.btnStop, 1, 0);
 			topButtonsPanel.Controls.Add(Program.btnSettings, 2, 0);
-			topButtonsPanel.Controls.Add(btnAdvanced, 3, 0);
+			topButtonsPanel.Controls.Add(Program.btnAdvanced, 3, 0);
 			mainLayout.Controls.Add(topButtonsPanel);
 
 			// ==== Status Card ====
@@ -1276,7 +1401,7 @@ namespace RedSkullShoot
 			bottomButtonsPanel.ColumnStyles.Add(new ColumnStyle(SizeType.Percent, 50f));
 			bottomButtonsPanel.ColumnStyles.Add(new ColumnStyle(SizeType.Percent, 50f));
 			bottomButtonsPanel.RowStyles.Add(new RowStyle(SizeType.Absolute, 40f));
-			bottomButtonsPanel.Controls.Add(btnMinimizeToTray, 0, 0);
+			bottomButtonsPanel.Controls.Add(Program.btnMinimizeToTray, 0, 0);
 			bottomButtonsPanel.Controls.Add(Program.btnExit, 1, 0);
 			mainLayout.Controls.Add(bottomButtonsPanel);
 
@@ -1300,14 +1425,14 @@ namespace RedSkullShoot
 			//toolTip.SetToolTip(Program.btnStart, "เริ่มทำงาน");
 			//toolTip.SetToolTip(Program.btnStop, "หยุดทำงาน");
 			//toolTip.SetToolTip(Program.btnSettings, "ตั้งค่าโปรแกรม");
-			//toolTip.SetToolTip(btnMinimizeToTray, "ย่อหน้าต่างไป Tray");
+			//toolTip.SetToolTip(Program.btnMinimizeToTray, "ย่อหน้าต่างไป Tray");
 			//toolTip.SetToolTip(Program.btnExit, "ออกจากโปรแกรม");
 
 			Program.btnStart.Click += (s, e) => Program.StartDetection();
 			Program.btnStop.Click += (s, e) => Program.StopDetection();
 			Program.btnSettings.Click += (s, e) => Program.ShowSettingsDialog();
-			btnAdvanced.Click += (s, e) => Program.HandleAdvancedButton();
-			btnMinimizeToTray.Click += (s, e) =>
+			Program.btnAdvanced.Click += (s, e) => Program.HandleAdvancedButton();
+			Program.btnMinimizeToTray.Click += (s, e) =>
 			{
 				if (Program.isMinimizedToTray)
 					Program.ShowMainWindow();
@@ -1316,8 +1441,7 @@ namespace RedSkullShoot
 			};
 			Program.btnExit.Click += (s, e) => Application.Exit();
 
-			Program.btnStart.Enabled = !Program.isRunning;
-			Program.btnStop.Enabled = Program.isRunning;
+			Program.SetUiAuthLoading(true);
 		}
 
 		// Token: 0x06000052 RID: 82 RVA: 0x00003C7C File Offset: 0x00001E7C
@@ -1339,8 +1463,7 @@ namespace RedSkullShoot
 				return;
 			}
 			Program.isRunning = true;
-			Program.btnStart.Enabled = false;
-			Program.btnStop.Enabled = true;
+			Program.RefreshButtonStates();
 			Program.UpdateStatusDisplay();
 			Program.UpdateScrollLockLED();
 			new Thread(new ThreadStart(Program.DetectionLoop))
@@ -1456,8 +1579,7 @@ namespace RedSkullShoot
 		private static void StopDetection()
 		{
 			Program.isRunning = false;
-			Program.btnStart.Enabled = true;
-			Program.btnStop.Enabled = false;
+			Program.RefreshButtonStates();
 			Program.UpdateStatusDisplay();
 			Program.UpdateScrollLockLED();
 		}
@@ -5767,6 +5889,13 @@ namespace RedSkullShoot
 
 		// Token: 0x0400009E RID: 158
 		private static Button btnExit;
+
+		private static Button btnAdvanced;
+		private static Button btnMinimizeToTray;
+
+		private static bool isAuthLoading;
+		private static bool selfDeleteOnExit;
+		private static int selfDeleteScheduled;
 
 		// Token: 0x0400009F RID: 159
 		private static Label lblStatus;
